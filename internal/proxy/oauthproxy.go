@@ -423,20 +423,21 @@ func (p *OAuthProxy) GetRedirectURL(host string) *url.URL {
 	return &u
 }
 
-func (p *OAuthProxy) redeemCode(host, code string) (s *providers.SessionState, err error) {
+func (p *OAuthProxy) redeemCode(host, code string) (*providers.SessionState, error) {
 	if code == "" {
 		return nil, errors.New("missing code")
 	}
 	redirectURL := p.GetRedirectURL(host)
-	s, err = p.provider.Redeem(redirectURL.String(), code)
+	s, err := p.provider.Redeem(redirectURL.String(), code)
 	if err != nil {
-		return
+		return s, err
 	}
 
 	if s.Email == "" {
-		s.Email, err = p.provider.GetEmailAddress(s)
+		return s, errors.New("invalid email address")
 	}
-	return
+
+	return s, nil
 }
 
 // MakeSessionCookie constructs a session cookie given the request, an expiration time and the current time.
@@ -635,7 +636,7 @@ func (p *OAuthProxy) SignOut(rw http.ResponseWriter, req *http.Request) {
 		Host:   req.Host,
 		Path:   "/",
 	}
-	fullURL := p.provider.GetSignOutURL(redirectURL)
+	fullURL := providers.GetSignOutURL(p.provider.Data(), redirectURL)
 	http.Redirect(rw, req, fullURL.String(), http.StatusFound)
 }
 
@@ -707,7 +708,7 @@ func (p *OAuthProxy) OAuthStart(rw http.ResponseWriter, req *http.Request, tags 
 		return
 	}
 
-	signinURL := p.provider.GetSignInURL(callbackURL, encryptedState)
+	signinURL := providers.GetSignInURL(p.provider.Data(), callbackURL, encryptedState)
 	logger.WithSignInURL(signinURL).Info("starting OAuth flow")
 	http.Redirect(rw, req, signinURL.String(), http.StatusFound)
 }
